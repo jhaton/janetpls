@@ -1,3 +1,7 @@
+/reference/
+/bin/
+/janet-lsp
+
 build
 jpm_tree/**
 .clj-kondo

@@ -1,107 +1,93 @@
 # Janet LSP
 
-A Language Server (LSP) for the [Janet](https://janet-lang.org) programming language.
+A standalone [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server for [Janet](https://janet-lang.org), implemented in Go.
 
-## Overview
+The server parses Janet source without evaluating it. It therefore remains useful while a buffer is incomplete and never executes workspace code as part of diagnostics or indexing.
 
-The goal of this project is to provide an augmented editor/tooling experience for [Janet](https://janet-lang.org), via a self-contained, [Language Server Protocol](https://microsoft.github.io/language-server-protocol/)-compliant language server (which is itself implemented in Janet!).
+## Features
 
-Current features include:
+- Tolerant Janet lexer and delimiter parser, including mutable containers, comments, escaped strings, and long backtick strings
+- Push and pull syntax diagnostics
+- Go to definition for top-level and lexical bindings
+- Workspace references and scope-aware rename
+- Default `import` prefixes, `:as` aliases, `:prefix` aliases, and `use`
+- Completion for visible local, module, and imported symbols
+- Hover documentation and signature help from source definitions
+- Document symbols
+- UTF-16 LSP position handling
+- Full-document open-buffer overlays and request cancellation
+- Git-bounded workspace discovery with a recursive fallback outside Git repositories
 
-- [x] Auto-completion based on symbols in the Janet Standard Library and defined in user code
-- [x] On-hover definition of symbols as returned by `(doc ,symbol)`
-- [x] Inline compiler errors
-- [x] Pop-up signature help 
-- [x] Jump to definitions
-- [x] Find references across workspace modules
-- [x] Scope-aware symbol rename across definitions, default imports, and `:as` aliases
+The server intentionally does not advertise formatting. Diagnostics currently cover source structure, not Janet compile-time or runtime errors. Dynamic bindings introduced by arbitrary macros cannot be inferred statically.
 
-Planned features include:
+## Build
 
-- [ ] Additional refactoring actions
+The repository pins its Go toolchain with [mise](https://mise.jdx.dev/):
 
-Possible (but de-prioritized) features include:
-
-- [ ] Syntax highlighting for Janet via semantic tokens
-
-Desirable, but possibly more complicated/difficult features include:
-
-- [ ] Stand-alone (i.e. non-Editor-dependent) usage via API/CLI
-
-## Caveats
-
-- MacOS support is _mostly_ untested (but as far as I know there shouldn't be major differences). 
-- The only editor integration currently tested against is [Visual Studio Code](https://code.visualstudio.com/).
-- I've never written a language server before, so I don't really know what I'm doing. Help me, if you'd like!
-- Workspace references use Git's tracked and unignored Janet files when available, then fall back to a recursive Janet source scan.
-
-## Clients (i.e. Editors)
-
-Currently, Janet LSP is being regularly tested and is expected to work out of the box with two major editors:
-
-- [Visual Studio Code](https://code.visualstudio.com/), which you can try/take advantage of by installing the [Janet++](https://github.com/CFiggers/vscode-janet-plus-plus) extension [from the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=CalebFiggers.vscode-janet-plus-plus), and
-- [Neovim](https://neovim.io/), which ships with support for LSP servers.
-
-Other editors that implement LSP client protocols, either built-in or through editor extensions, include:
-
-- Emacs
-- Vim
-- Sublime Text
-- Helix
-- Kakoune
-- Zed
-
-If you get Janet LSP working with any of these options, please let me know!
-
-## Getting Started (for Development)
-
-### Clone this project and Build the stand-alone binary and .jimage file
-
-Requires [Janet](https://github.com/janet-lang/janet) and [jpm](https://github.com/janet-lang/jpm).
-
-```shell
-$ git clone https://github.com/jhaton/janet-lsp
-$ cd janet-lsp
-$ jpm deps
-$ jpm build
+```sh
+git clone https://github.com/jhaton/janet-lsp.git
+cd janet-lsp
+mise install
+mise exec -- make check
 ```
 
-A .jimage (Janet image) file will be generated in `/build`. Using a .jimage file makes Janet LSP fully cross-platform (wherever there is a compatible Janet binary on the user's path). But it also means that you must have a Janet binary to use Janet LSP (this author struggles to imagine a scenario where you would both need the LSP and NOT have Janet itself installed).
+The binary is written to `bin/janet-lsp`. Janet itself is not required to build or run the language server.
 
-### Installing
+To install through Go instead:
 
-After running the commands above, the following command will copy the `janet-lsp` binscript to a location that can be executed via the command line.
-
-```shell
-$ jpm install
+```sh
+go install github.com/jhaton/janet-lsp/cmd/janet-lsp@latest
 ```
 
-Test successful install by running the following:
+Confirm the installed binary:
 
-```shell
-$ janet-lsp --version
+```sh
+janet-lsp --version
 ```
 
-### Debug Console
+## Editor configuration
 
-Starting in version 0.0.3, you can start a debug console by passing `--console` to any invocation of Janet LSP, including any of the following:
+Configure an LSP client to start `janet-lsp` over standard input and output for `*.janet` files, with the project directory as the workspace root.
 
-```console
-$ ./build/janet-lsp --console
-  OR
-$ janet -i ./build/janet-lsp.jimage --console
-  OR
-$ janet ./src/main.janet --console
+Neovim 0.11 example:
+
+```lua
+vim.lsp.config("janet_lsp", {
+  cmd = { "janet-lsp" },
+  filetypes = { "janet" },
+  root_markers = { "project.janet", ".git" },
+})
+vim.lsp.enable("janet_lsp")
 ```
 
-In this mode, the LSP will launch a simple RPC server that listens on port 8037 (by default, configurable with the `--debug-port` flag). Janet LSPs with version `>= 0.0.3` will check for a listening server on port 8037 (or the port specified by `--debug-port`) and, if found, transmit anything sent through the `(logging/log)` function to be printed out by the debug console.
+Helix example:
 
-In the future, the debug console may function as a networked REPL allowing commands to be sent to the running language server process (but right now it functions in listen-only mode).
+```toml
+[language-server.janet-lsp]
+command = "janet-lsp"
 
-## Contributions
+[[language]]
+name = "janet"
+language-servers = ["janet-lsp"]
+```
 
-Issues and Pull Requests welcome.
+## Architecture
 
-## Prior Art
+- `cmd/janet-lsp`: CLI and stdio process lifecycle
+- `internal/lsp`: JSON-RPC framing, LSP request dispatch, open-document state, and wire types
+- `internal/janet`: tolerant syntax model, UTF-16 position conversion, lexical scopes, imports, and workspace index
 
-This project is a hard fork from (with much appreciation to) [JohnDoneth/janet-language-server](https://github.com/JohnDoneth/janet-language-server), which is Copyright (c) 2022 JohnDoneth and contributors.
+Each language request builds a deterministic index from Git-tracked and unignored Janet files plus the current in-memory buffers. This favors correctness under external file changes and keeps server state small. Requests run independently and honor `$/cancelRequest`.
+
+## Development
+
+```sh
+mise exec -- make test   # unit and protocol integration tests
+mise exec -- make race   # race detector
+mise exec -- make build  # bin/janet-lsp
+mise exec -- make check  # all of the above plus a version smoke test
+```
+
+## Prior art
+
+This project originated as a hard fork of [JohnDoneth/janet-language-server](https://github.com/JohnDoneth/janet-language-server). The pre-Go implementation remains available through repository history.
