@@ -12,7 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	compilerapi "github.com/jhaton/janet-lsp/internal/compiler"
 	"github.com/jhaton/janet-lsp/internal/janet"
 )
 
@@ -159,6 +161,136 @@ func TestIncompleteDefinitionSupportsDiagnosticsAndSymbols(t *testing.T) {
 		t.Fatalf("document symbols = %d, want 0", got)
 	}
 }
+
+func TestOptionalCompilerDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	path := writeLSPFixture(t, root, "model.janet", "(efn check-doors! [game] game)\n")
+	var stderr bytes.Buffer
+	server, err := NewServer(strings.NewReader(""), io.Discard, &stderr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, responseError := server.handleRequest(context.Background(), "initialize", mustJSON(t, initializeParams{
+		RootURI: janet.PathToURI(root),
+	})); responseError != nil {
+		t.Fatalf("initialize: %#v", responseError)
+	}
+	server.compilerEnabled = true
+	server.compilerCommand = []string{os.Args[0], "-test.run=TestLSPCompilerHelperProcess", "--", "diagnostic"}
+	server.compilerTimeout = 10 * time.Second
+
+	result, responseError := server.handleRequest(context.Background(), "textDocument/diagnostic", diagnosticParams(t, path))
+	if responseError != nil {
+		t.Fatalf("diagnostics: %#v", responseError)
+	}
+	items := result.(documentDiagnosticReport).Items
+	if len(items) != 1 || items[0].Message != "unknown symbol efn" || items[0].Source != "janet compiler" {
+		t.Fatalf("diagnostics = %#v", items)
+	}
+}
+
+func TestCompilerFailureFallsBackToGoDiagnostics(t *testing.T) {
+	for _, mode := range []string{"exit", "sleep"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			path := writeLSPFixture(t, root, "model.janet", "(efn check-doors! [game] game)\n")
+			var stderr bytes.Buffer
+			server, err := NewServer(strings.NewReader(""), io.Discard, &stderr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server.root = root
+			server.compilerEnabled = true
+			server.compilerCommand = []string{os.Args[0], "-test.run=TestLSPCompilerHelperProcess", "--", mode}
+			server.compilerTimeout = 20 * time.Millisecond
+
+			result, responseError := server.handleRequest(context.Background(), "textDocument/diagnostic", diagnosticParams(t, path))
+			if responseError != nil {
+				t.Fatalf("diagnostics: %#v", responseError)
+			}
+			if items := result.(documentDiagnosticReport).Items; len(items) != 0 {
+				t.Fatalf("fallback diagnostics = %#v, want pure-Go result", items)
+			}
+			if !strings.Contains(stderr.String(), "continuing with Go analysis") {
+				t.Fatalf("stderr = %q, want degradation notice", stderr.String())
+			}
+		})
+	}
+}
+
+func TestInitializeEnablesConfiguredCompiler(t *testing.T) {
+	server, err := NewServer(strings.NewReader(""), io.Discard, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, responseError := server.handleRequest(context.Background(), "initialize", mustJSON(t, initializeParams{
+		RootURI: janet.PathToURI(t.TempDir()),
+		InitializationOptions: initializationOptions{
+			CompilerDiagnostics: true,
+			CompilerPath:        os.Args[0],
+		},
+	})); responseError != nil {
+		t.Fatalf("initialize: %#v", responseError)
+	}
+	if !server.compilerEnabled || len(server.compilerCommand) != 1 || server.compilerCommand[0] != os.Args[0] {
+		t.Fatalf("compiler configuration = enabled:%v command:%#v", server.compilerEnabled, server.compilerCommand)
+	}
+}
+
+func TestMergeDiagnosticsRemovesDuplicates(t *testing.T) {
+	shared := diagnostic{
+		Range: janet.Range{
+			Start: janet.Position{Line: 1, Character: 2},
+			End:   janet.Position{Line: 1, Character: 3},
+		},
+		Severity: 1,
+		Source:   "janet-lsp",
+		Message:  "same error",
+	}
+	duplicate := shared
+	duplicate.Source = "janet compiler"
+	items := mergeDiagnostics([]diagnostic{shared}, []diagnostic{duplicate})
+	if len(items) != 1 {
+		t.Fatalf("merged diagnostics = %#v", items)
+	}
+}
+
+func TestLSPCompilerHelperProcess(t *testing.T) {
+	separator := -1
+	for index, argument := range os.Args {
+		if argument == "--" {
+			separator = index
+			break
+		}
+	}
+	if separator < 0 || separator+1 >= len(os.Args) {
+		return
+	}
+	switch os.Args[separator+1] {
+	case "diagnostic":
+		var request compilerapi.Request
+		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
+			os.Exit(2)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(compilerapi.Response{Diagnostics: []compilerapi.Diagnostic{{
+			Line: 0, Column: 0, Message: "unknown symbol efn",
+		}}})
+		os.Exit(0)
+	case "exit":
+		os.Exit(7)
+	case "sleep":
+		time.Sleep(time.Minute)
+		os.Exit(0)
+	}
+}
+
+func diagnosticParams(t *testing.T, path string) json.RawMessage {
+	t.Helper()
+	return mustJSON(t, struct {
+		TextDocument textDocumentIdentifier `json:"textDocument"`
+	}{TextDocument: textDocumentIdentifier{URI: janet.PathToURI(path)}})
+}
+
 func TestCancelNotificationCancelsPendingRequest(t *testing.T) {
 	server, err := NewServer(strings.NewReader(""), io.Discard, io.Discard)
 	if err != nil {

@@ -1,5 +1,14 @@
 # Changelog
 
+
+## 0.4.0 - 2026-09-08
+
+- Added opt-in Janet compiler diagnostics through an isolated cgo/libjanet helper process.
+- Report compile-time errors such as unknown symbols from open-buffer contents.
+- Keep the pure-Go language server functional when the helper is absent, crashes, times out, or returns invalid output.
+- Skip compiler checks for syntactically incomplete buffers and deduplicate merged diagnostics.
+- Use pull diagnostics exclusively to avoid duplicate diagnostics in clients that support both LSP mechanisms.
+
 ## 0.3.0 - 2026-09-08
 
 - Added native, deterministic whole-document Janet formatting.

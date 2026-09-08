@@ -10,11 +10,12 @@ import (
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/jhaton/janet-lsp/internal/janet"
 )
 
-const Version = "0.3.0"
+const Version = "0.4.0"
 
 type openDocument struct {
 	Text    string
@@ -35,6 +36,11 @@ type Server struct {
 	cancellations   map[string]context.CancelFunc
 	requests        sync.WaitGroup
 	shutdown        atomic.Bool
+
+	compilerEnabled     bool
+	compilerCommand     []string
+	compilerTimeout     time.Duration
+	compilerFailureOnce sync.Once
 }
 
 func NewServer(reader io.Reader, writer io.Writer, stderr io.Writer) (*Server, error) {
@@ -193,6 +199,7 @@ func (server *Server) handleRequest(ctx context.Context, method string, rawParam
 			server.root = root
 			server.rootMu.Unlock()
 		}
+		server.configureCompiler(params.InitializationOptions)
 		return initializeResult(), nil
 	case "shutdown":
 		server.shutdown.Store(true)
@@ -508,7 +515,8 @@ func (server *Server) documentDiagnostics(ctx context.Context, raw json.RawMessa
 	if document == nil {
 		return documentDiagnosticReport{Kind: "full", Items: []diagnostic{}}, nil
 	}
-	return documentDiagnosticReport{Kind: "full", Items: diagnostics(document)}, nil
+	items := mergeDiagnostics(diagnostics(document), server.compileDiagnostics(ctx, document))
+	return documentDiagnosticReport{Kind: "full", Items: items}, nil
 }
 
 func (server *Server) positionRequest(ctx context.Context, raw json.RawMessage) (documentPositionParams, *janet.Index, *janet.Occurrence, *rpcError) {

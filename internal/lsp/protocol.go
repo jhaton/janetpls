@@ -21,8 +21,14 @@ type rpcError struct {
 }
 
 type initializeParams struct {
-	RootURI          string            `json:"rootUri"`
-	WorkspaceFolders []workspaceFolder `json:"workspaceFolders"`
+	RootURI               string                `json:"rootUri"`
+	WorkspaceFolders      []workspaceFolder     `json:"workspaceFolders"`
+	InitializationOptions initializationOptions `json:"initializationOptions"`
+}
+
+type initializationOptions struct {
+	CompilerDiagnostics bool   `json:"compilerDiagnostics"`
+	CompilerPath        string `json:"compilerPath,omitempty"`
 }
 
 type workspaceFolder struct {
