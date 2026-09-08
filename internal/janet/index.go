@@ -407,8 +407,10 @@ func collectBindings(model *documentModel, form *Node, topLevel bool, parentEnd 
 		if !topLevel && len(form.Children) > 1 {
 			addLocalBinding(model, form.Children[1], form.Children[1].End, parentEnd)
 		}
-		if parameters := firstVector(form.Children[2:]); parameters != nil {
-			addPatternBindings(model, parameters, parameters.End, form.End)
+		if len(form.Children) > 2 {
+			if parameters := firstVector(form.Children[2:]); parameters != nil {
+				addPatternBindings(model, parameters, parameters.End, form.End)
+			}
 		}
 	case "fn":
 		if parameters := firstVector(form.Children[1:]); parameters != nil {

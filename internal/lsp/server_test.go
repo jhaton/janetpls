@@ -123,6 +123,39 @@ func TestServerNavigationRenameAndDiagnostics(t *testing.T) {
 		t.Fatalf("diagnostics = %#v, error = %#v", diagnosticResult, responseError)
 	}
 }
+
+func TestIncompleteDefinitionSupportsDiagnosticsAndSymbols(t *testing.T) {
+	root := t.TempDir()
+	path := writeLSPFixture(t, root, "incomplete.janet", "(defn")
+	uri := janet.PathToURI(path)
+	server, err := NewServer(strings.NewReader(""), io.Discard, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, responseError := server.handleRequest(context.Background(), "initialize", mustJSON(t, initializeParams{
+		RootURI: janet.PathToURI(root),
+	})); responseError != nil {
+		t.Fatalf("initialize: %#v", responseError)
+	}
+
+	params := mustJSON(t, struct {
+		TextDocument textDocumentIdentifier `json:"textDocument"`
+	}{TextDocument: textDocumentIdentifier{URI: uri}})
+	diagnostics, responseError := server.handleRequest(context.Background(), "textDocument/diagnostic", params)
+	if responseError != nil {
+		t.Fatalf("diagnostics: %#v", responseError)
+	}
+	if len(diagnostics.(documentDiagnosticReport).Items) == 0 {
+		t.Fatal("diagnostics = empty, want incomplete-form diagnostic")
+	}
+	symbols, responseError := server.handleRequest(context.Background(), "textDocument/documentSymbol", params)
+	if responseError != nil {
+		t.Fatalf("document symbols: %#v", responseError)
+	}
+	if got := len(symbols.([]documentSymbol)); got != 0 {
+		t.Fatalf("document symbols = %d, want 0", got)
+	}
+}
 func TestCancelNotificationCancelsPendingRequest(t *testing.T) {
 	server, err := NewServer(strings.NewReader(""), io.Discard, io.Discard)
 	if err != nil {
