@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-09-08
+
+- Added native, deterministic whole-document Janet formatting.
+- Preserve comments, reader macros, mutable containers, strings, and canonical control-form indentation without evaluating source.
+- Reject malformed input instead of returning a destructive formatting edit.
+- Advertise and implement `textDocument/formatting` using open-document overlays.
+- Added formatter and protocol regression coverage.
+
 ## 0.2.0 - 2026-09-07
 
 - Reimplemented the language server as a standalone Go binary with no Janet runtime dependency.

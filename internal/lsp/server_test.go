@@ -39,7 +39,9 @@ func TestServerRunInitializeShutdownExit(t *testing.T) {
 	initialize := readFramedJSON(t, reader)
 	result := initialize["result"].(map[string]any)
 	capabilities := result["capabilities"].(map[string]any)
-	if capabilities["positionEncoding"] != "utf-16" || capabilities["referencesProvider"] != true {
+	if capabilities["positionEncoding"] != "utf-16" ||
+		capabilities["referencesProvider"] != true ||
+		capabilities["documentFormattingProvider"] != true {
 		t.Fatalf("initialize capabilities = %#v", capabilities)
 	}
 	shutdown := readFramedJSON(t, reader)

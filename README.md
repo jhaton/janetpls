@@ -14,11 +14,12 @@ The server parses Janet source without evaluating it. It therefore remains usefu
 - Completion for visible local, module, and imported symbols
 - Hover documentation and signature help from source definitions
 - Document symbols
+- Deterministic whole-document formatting compatible with `spork/fmt`
 - UTF-16 LSP position handling
 - Full-document open-buffer overlays and request cancellation
 - Git-bounded workspace discovery with a recursive fallback outside Git repositories
 
-The server intentionally does not advertise formatting. Diagnostics currently cover source structure, not Janet compile-time or runtime errors. Dynamic bindings introduced by arbitrary macros cannot be inferred statically.
+Formatting rejects malformed source rather than returning a destructive edit. Diagnostics currently cover source structure, not Janet compile-time or runtime errors. Dynamic bindings introduced by arbitrary macros cannot be inferred statically.
 
 ## Build
 
@@ -75,7 +76,7 @@ language-servers = ["janet-lsp"]
 
 - `cmd/janet-lsp`: CLI and stdio process lifecycle
 - `internal/lsp`: JSON-RPC framing, LSP request dispatch, open-document state, and wire types
-- `internal/janet`: tolerant syntax model, UTF-16 position conversion, lexical scopes, imports, and workspace index
+- `internal/janet`: tolerant syntax model, deterministic formatter, UTF-16 position conversion, lexical scopes, imports, and workspace index
 
 Each language request builds a deterministic index from Git-tracked and unignored Janet files plus the current in-memory buffers. This favors correctness under external file changes and keeps server state small. Requests run independently and honor `$/cancelRequest`.
 
@@ -90,4 +91,4 @@ mise exec -- make check  # all of the above plus a version smoke test
 
 ## Prior art
 
-This project originated as a hard fork of [JohnDoneth/janet-language-server](https://github.com/JohnDoneth/janet-language-server). The pre-Go implementation remains available through repository history.
+This project originated as a hard fork of [JohnDoneth/janet-language-server](https://github.com/JohnDoneth/janet-language-server). The formatter algorithm is adapted from [`janet-lang/spork`](https://github.com/janet-lang/spork) under its MIT license. The pre-Go implementation remains available through repository history.

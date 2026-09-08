@@ -14,7 +14,7 @@ import (
 	"github.com/jhaton/janet-lsp/internal/janet"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 type openDocument struct {
 	Text    string
@@ -218,6 +218,8 @@ func (server *Server) handleRequest(ctx context.Context, method string, rawParam
 		return server.documentSymbols(ctx, rawParams)
 	case "textDocument/diagnostic":
 		return server.documentDiagnostics(ctx, rawParams)
+	case "textDocument/formatting":
+		return server.formatting(ctx, rawParams)
 	default:
 		return nil, &rpcError{Code: -32601, Message: "method not found: " + method}
 	}
@@ -226,16 +228,17 @@ func (server *Server) handleRequest(ctx context.Context, method string, rawParam
 func initializeResult() map[string]any {
 	return map[string]any{
 		"capabilities": map[string]any{
-			"positionEncoding":       "utf-16",
-			"textDocumentSync":       map[string]any{"openClose": true, "change": 1},
-			"definitionProvider":     true,
-			"referencesProvider":     true,
-			"renameProvider":         map[string]any{"prepareProvider": true},
-			"hoverProvider":          true,
-			"completionProvider":     map[string]any{"resolveProvider": false, "triggerCharacters": []string{"/"}},
-			"signatureHelpProvider":  map[string]any{"triggerCharacters": []string{" "}},
-			"documentSymbolProvider": true,
-			"diagnosticProvider":     map[string]any{"interFileDependencies": true, "workspaceDiagnostics": false},
+			"positionEncoding":           "utf-16",
+			"textDocumentSync":           map[string]any{"openClose": true, "change": 1},
+			"definitionProvider":         true,
+			"referencesProvider":         true,
+			"renameProvider":             map[string]any{"prepareProvider": true},
+			"hoverProvider":              true,
+			"completionProvider":         map[string]any{"resolveProvider": false, "triggerCharacters": []string{"/"}},
+			"signatureHelpProvider":      map[string]any{"triggerCharacters": []string{" "}},
+			"documentSymbolProvider":     true,
+			"diagnosticProvider":         map[string]any{"interFileDependencies": true, "workspaceDiagnostics": false},
+			"documentFormattingProvider": true,
 		},
 		"serverInfo": map[string]any{"name": "janet-lsp", "version": Version},
 	}
@@ -448,6 +451,49 @@ func (server *Server) documentSymbols(ctx context.Context, raw json.RawMessage) 
 		})
 	}
 	return symbols, nil
+}
+func (server *Server) formatting(ctx context.Context, raw json.RawMessage) (any, *rpcError) {
+	var params documentFormattingParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, invalidParams(err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, &rpcError{Code: -32800, Message: "request cancelled"}
+	}
+	uri := canonicalURI(params.TextDocument.URI)
+	server.documentsMu.RLock()
+	open, isOpen := server.documents[uri]
+	server.documentsMu.RUnlock()
+
+	var source string
+	var path string
+	if isOpen {
+		source = open.Text
+		path, _ = janet.URIToPath(uri)
+	} else {
+		var err error
+		path, err = janet.URIToPath(uri)
+		if err != nil {
+			return nil, invalidParams(err)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, &rpcError{Code: -32603, Message: err.Error()}
+		}
+		source = string(content)
+	}
+	formatted, err := janet.Format(source)
+	if err != nil {
+		return nil, &rpcError{Code: -32602, Message: "cannot format Janet source: " + err.Error()}
+	}
+	if formatted == source {
+		return []textEdit{}, nil
+	}
+	document := janet.Parse(uri, path, source)
+	return []textEdit{{
+		Range:   document.Range(0, len(source)),
+		NewText: formatted,
+	}}, nil
 }
 
 func (server *Server) documentDiagnostics(ctx context.Context, raw json.RawMessage) (any, *rpcError) {

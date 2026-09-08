@@ -65,6 +65,9 @@ type documentPositionParams struct {
 	TextDocument textDocumentIdentifier `json:"textDocument"`
 	Position     janet.Position         `json:"position"`
 }
+type documentFormattingParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+}
 
 type referenceParams struct {
 	TextDocument textDocumentIdentifier `json:"textDocument"`
