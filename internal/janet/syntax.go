@@ -132,8 +132,12 @@ func Parse(uri, path, source string) *Document {
 				})
 				continue
 			}
-			current := stack[len(stack)-1]
-			if !matchingDelimiter(current.Delimiter, token.Text) {
+			match := len(stack) - 1
+			for match > 0 && !matchingDelimiter(stack[match].Delimiter, token.Text) {
+				match--
+			}
+			if match == 0 {
+				current := stack[len(stack)-1]
 				diagnostics = append(diagnostics, Diagnostic{
 					Start:   token.Start,
 					End:     token.End,
@@ -141,8 +145,17 @@ func Parse(uri, path, source string) *Document {
 				})
 				continue
 			}
+			for unclosed := len(stack) - 1; unclosed > match; unclosed-- {
+				node := stack[unclosed]
+				diagnostics = append(diagnostics, Diagnostic{
+					Start:   node.Start,
+					End:     min(node.Start+len(node.Delimiter), len(source)),
+					Message: fmt.Sprintf("unclosed delimiter %q", node.Delimiter),
+				})
+			}
+			current := stack[match]
 			current.End = token.End
-			stack = stack[:len(stack)-1]
+			stack = stack[:match]
 		default:
 			node := &Node{
 				Kind:   NodeAtom,

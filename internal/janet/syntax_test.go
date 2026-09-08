@@ -16,6 +16,22 @@ func TestParseToleratesIncompleteSource(t *testing.T) {
 	}
 }
 
+func TestMismatchedDelimiterRecoversAtMatchingOuterForm(t *testing.T) {
+	source := `(defn check [game
+  (when true
+    (print game)))
+
+(def ok 1)
+`
+	document := Parse("file:///test.janet", "/test.janet", source)
+	if len(document.Diagnostics) != 1 || document.Diagnostics[0].Message != `unclosed delimiter "["` {
+		t.Fatalf("diagnostics = %#v, want one unclosed vector", document.Diagnostics)
+	}
+	if got := len(document.Root.Children); got != 2 {
+		t.Fatalf("top-level forms = %d, want parser recovery before second form", got)
+	}
+}
+
 func TestParseIgnoresCommentsAndStringContents(t *testing.T) {
 	source := "# (ignored symbol)\n(def value \"(not-a-form)\")\n(def long ``[also ignored]``)"
 	document := Parse("file:///test.janet", "/test.janet", source)
