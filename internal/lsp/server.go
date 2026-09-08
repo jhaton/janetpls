@@ -151,7 +151,6 @@ func (server *Server) handleNotification(ctx context.Context, message rpcMessage
 		server.documentsMu.Lock()
 		server.documents[uri] = openDocument{Text: params.TextDocument.Text, Version: params.TextDocument.Version}
 		server.documentsMu.Unlock()
-		server.publishDiagnostics(ctx, uri, params.TextDocument.Text)
 	case "textDocument/didChange":
 		var params didChangeParams
 		if json.Unmarshal(message.Params, &params) != nil || len(params.ContentChanges) == 0 {
@@ -162,7 +161,6 @@ func (server *Server) handleNotification(ctx context.Context, message rpcMessage
 		server.documentsMu.Lock()
 		server.documents[uri] = openDocument{Text: text, Version: params.TextDocument.Version}
 		server.documentsMu.Unlock()
-		server.publishDiagnostics(ctx, uri, text)
 	case "textDocument/didClose":
 		var params didCloseParams
 		if json.Unmarshal(message.Params, &params) != nil {
@@ -172,7 +170,6 @@ func (server *Server) handleNotification(ctx context.Context, message rpcMessage
 		server.documentsMu.Lock()
 		delete(server.documents, uri)
 		server.documentsMu.Unlock()
-		_ = server.notify("textDocument/publishDiagnostics", publishDiagnosticsParams{URI: uri, Diagnostics: []diagnostic{}})
 	}
 }
 
@@ -532,22 +529,6 @@ func (server *Server) positionRequest(ctx context.Context, raw json.RawMessage) 
 		return params, index, nil, nil
 	}
 	return params, index, &occurrence, nil
-}
-
-func (server *Server) publishDiagnostics(ctx context.Context, uri, source string) {
-	if ctx.Err() != nil {
-		return
-	}
-	path, err := janet.URIToPath(uri)
-	if err != nil {
-		return
-	}
-	document := janet.Parse(canonicalURI(uri), path, source)
-	if err := server.notify("textDocument/publishDiagnostics", publishDiagnosticsParams{
-		URI: document.URI, Diagnostics: diagnostics(document),
-	}); err != nil {
-		fmt.Fprintf(server.stderr, "publish diagnostics: %v\n", err)
-	}
 }
 
 func diagnostics(document *janet.Document) []diagnostic {

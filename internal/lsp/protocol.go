@@ -104,11 +104,6 @@ type diagnostic struct {
 	Message  string      `json:"message"`
 }
 
-type publishDiagnosticsParams struct {
-	URI         string       `json:"uri"`
-	Diagnostics []diagnostic `json:"diagnostics"`
-}
-
 type completionList struct {
 	IsIncomplete bool             `json:"isIncomplete"`
 	Items        []completionItem `json:"items"`

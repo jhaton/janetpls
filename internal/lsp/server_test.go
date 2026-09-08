@@ -116,6 +116,9 @@ func TestServerNavigationRenameAndDiagnostics(t *testing.T) {
 	server.handleNotification(context.Background(), rpcMessage{Method: "textDocument/didOpen", Params: mustJSON(t, didOpenParams{
 		TextDocument: textDocumentItem{URI: modelURI, LanguageID: "janet", Version: 2, Text: broken},
 	})})
+	if output.Len() != 0 {
+		t.Fatalf("didOpen emitted push diagnostics while pull diagnostics are enabled: %q", output.String())
+	}
 	diagnosticResult, responseError := server.handleRequest(context.Background(), "textDocument/diagnostic", mustJSON(t, struct {
 		TextDocument textDocumentIdentifier `json:"textDocument"`
 	}{TextDocument: textDocumentIdentifier{URI: modelURI}}))
