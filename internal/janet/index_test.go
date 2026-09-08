@@ -3,6 +3,7 @@ package janet
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -115,6 +116,32 @@ func TestOpenDocumentOverlayWinsOverDisk(t *testing.T) {
 	definitions := index.TopLevelDefinitions(uri)
 	if len(definitions) != 1 || definitions[0].Name != "memory-value" {
 		t.Fatalf("definitions = %#v, want memory overlay", definitions)
+	}
+}
+func TestDeletedTrackedFileDoesNotBreakIndexing(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	root := t.TempDir()
+	deleted := writeFixture(t, root, "deleted.janet", "(def stale 1)\n")
+	writeFixture(t, root, "live.janet", "(def live 2)\n")
+	if output, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, output)
+	}
+	if output, err := exec.Command("git", "-C", root, "add", ".").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, output)
+	}
+	if err := os.Remove(deleted); err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := BuildIndex(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions := index.TopLevelDefinitions(PathToURI(filepath.Join(root, "live.janet")))
+	if len(definitions) != 1 || definitions[0].Name != "live" {
+		t.Fatalf("live definitions = %#v", definitions)
 	}
 }
 

@@ -91,6 +91,9 @@ func BuildIndex(ctx context.Context, root string, overlays map[string]string) (*
 			return nil, err
 		}
 		source, readErr := os.ReadFile(path)
+		if errors.Is(readErr, os.ErrNotExist) {
+			continue
+		}
 		if readErr != nil {
 			return nil, fmt.Errorf("read %s: %w", path, readErr)
 		}
