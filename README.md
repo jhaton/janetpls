@@ -12,13 +12,13 @@ Current features include:
 - [x] On-hover definition of symbols as returned by `(doc ,symbol)`
 - [x] Inline compiler errors
 - [x] Pop-up signature help 
+- [x] Jump to definitions
+- [x] Find references across workspace modules
+- [x] Scope-aware symbol rename across definitions, default imports, and `:as` aliases
 
 Planned features include:
 
-- [ ] Jump to definition/implementation
-- [ ] Find references from definition/implementation
-- [ ] Refactoring helps
-- [ ] Symbol renaming helps
+- [ ] Additional refactoring actions
 
 Possible (but de-prioritized) features include:
 
@@ -33,6 +33,7 @@ Desirable, but possibly more complicated/difficult features include:
 - MacOS support is _mostly_ untested (but as far as I know there shouldn't be major differences). 
 - The only editor integration currently tested against is [Visual Studio Code](https://code.visualstudio.com/).
 - I've never written a language server before, so I don't really know what I'm doing. Help me, if you'd like!
+- Workspace references use Git's tracked and unignored Janet files when available, then fall back to a recursive Janet source scan.
 
 ## Clients (i.e. Editors)
 
@@ -59,7 +60,7 @@ If you get Janet LSP working with any of these options, please let me know!
 Requires [Janet](https://github.com/janet-lang/janet) and [jpm](https://github.com/janet-lang/jpm).
 
 ```shell
-$ git clone https://github.com/CFiggers/janet-lsp
+$ git clone https://github.com/jhaton/janet-lsp
 $ cd janet-lsp
 $ jpm deps
 $ jpm build

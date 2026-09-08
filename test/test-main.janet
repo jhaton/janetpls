@@ -1,6 +1,10 @@
 (use judge)
+(import spork/path)
+
 
 (import ../src/main)
+(import ../src/xref)
+
 
 (deftest "parse-content-length"
   (test (main/parse-content-length "000:123:456:789") 123)
@@ -110,3 +114,35 @@
           "./src/:all:.janet"
           "./:all:.janet"
           "./libs/:all:.janet"]))
+
+(defn xref-state
+  []
+  (let [source-path (path/abspath "test/resources/xref/consumer.janet")
+        uri (xref/path->uri source-path)
+        content (slurp source-path)
+        [_ env] (main/run-diagnostics uri content)]
+    [uri @{:documents @{uri @{:content content :eval-env env}}}]))
+
+(deftest "reference handler finds cross-module and aliased call sites"
+  (let [[uri state] (xref-state)
+        [_ _ locations] (main/on-document-references
+                          state
+                          {"textDocument" {"uri" uri}
+                           "position" {"line" 2 "character" 4}
+                           "context" {"includeDeclaration" false}})]
+    (test (length locations) 3)
+    (test (distinct (map |(get $ :uri) locations))
+          @[(xref/path->uri (path/abspath "test/resources/xref/alias.janet"))
+            (xref/path->uri (path/abspath "test/resources/xref/consumer.janet"))
+            (xref/path->uri (path/abspath "test/resources/xref/model.janet"))])))
+
+(deftest "rename handler updates declarations and qualified references"
+  (let [[uri state] (xref-state)
+        [_ _ workspace-edit] (main/on-document-rename
+                               state
+                               {"textDocument" {"uri" uri}
+                                "position" {"line" 2 "character" 4}
+                                "newName" "renamed"})
+        changes (get workspace-edit :changes)]
+    (test (length changes) 3)
+    (test (sum (map length (values changes))) 4)))

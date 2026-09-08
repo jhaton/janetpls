@@ -181,7 +181,7 @@
       :input (choice :non-form :form)
       :main (* (any :input))}))
 
-(defn- make-tree
+(defn make-tree
   "Turn a string of source code into an AST"
   [source]
   {:tag :top :value (peg/match parse-peg source)})

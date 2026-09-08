@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file.
 Format for entires is <version-string> - release date.
 
+## 0.1.0 - 2026-09-07
+
+- Added `textDocument/references`, `textDocument/prepareRename`, and `textDocument/rename`.
+- Resolve module-qualified references through default import prefixes and `:as` aliases.
+- Exclude function parameters, `let` bindings, and other recognized lexical bindings from workspace renames.
+- Use Git's tracked and unignored Janet files for bounded workspace indexing, with a recursive fallback.
+- Added cross-module, alias, shadowing, and handler integration tests.
+- Declared archive source dependencies so changes reliably rebuild the `.jimage`.
+
 ## 0.0.13 - 2026-08-08
 
 - Flychecking 

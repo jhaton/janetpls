@@ -8,6 +8,8 @@
 (import ./lookup :export true)
 (import ./rpc :export true)
 (import ./parser :export true)
+(import ./xref :export true)
+
 
 (import cmd)
 (import spork/argparse)
@@ -16,7 +18,7 @@
 
 (use judge)
 
-(def version "0.0.13")
+(def version "0.1.0")
 (def commit
   (with [proc (os/spawn ["git" "rev-parse" "--short" "HEAD"] :xp {:out :pipe})]
     (let [[out] (ev/gather
@@ -263,7 +265,9 @@
                                 :hoverProvider true
                                 :signatureHelpProvider {:triggerCharacters [" "]}
                                 :documentFormattingProvider true
-                                :definitionProvider true}
+                                :definitionProvider true
+                                :referencesProvider true
+                                :renameProvider {:prepareProvider true}}
                  :serverInfo {:name "janet-lsp"
                               :version version
                               :commit commit}}]
@@ -300,6 +304,59 @@
                               :commit commit}}]
     (logging/message message [:info])
     [:ok state message]))
+
+(defn reference-target
+  [state params]
+  (let [request-uri (first (peg/match uri-percent-encoding-peg
+                                      (get-in params ["textDocument" "uri"])))
+        content (get-in state [:documents request-uri :content])
+        eval-env (get-in state [:documents request-uri :eval-env])
+        position (get params "position")
+        analysis (xref/analyze request-uri content)
+        token (xref/token-at analysis position)
+        request-name (get token :value)
+        symbol-lookup (when request-name
+                        (get eval-env (symbol request-name) nil))
+        source-map (when symbol-lookup
+                     (get symbol-lookup :source-map nil))]
+    (when source-map
+      {:path (path/abspath (get source-map 0))
+       :name (last (string/split "/" request-name))
+       :token token})))
+
+(defn on-document-references
+  [state params]
+  (if-let [target (reference-target state params)]
+    (let [analyses (xref/workspace-analyses state)
+          include-declaration? (get-in params ["context" "includeDeclaration"] false)
+          references (xref/references analyses
+                                      (get target :path)
+                                      (get target :name)
+                                      include-declaration?)
+          locations (map |(xref/location (get $ :token)) references)]
+      [:ok state locations])
+    [:ok state @[]]))
+
+(defn on-prepare-rename
+  [state params]
+  (if-let [target (reference-target state params)]
+    [:ok state {:range (get (xref/location (get target :token)) :range)
+                :placeholder (get-in target [:token :value])}]
+    [:ok state :json/null]))
+
+(defn on-document-rename
+  [state params]
+  (if-let [target (reference-target state params)
+           new-name (get params "newName")
+           valid-name? (and (> (length new-name) 0)
+                            (not (string/find "/" new-name)))]
+    (let [analyses (xref/workspace-analyses state)
+          references (xref/references analyses
+                                      (get target :path)
+                                      (get target :name)
+                                      true)]
+      [:ok state (xref/rename-edit references new-name)])
+    [:ok state :json/null]))
 
 (defn on-document-definition
   ``
@@ -401,7 +458,9 @@
       "textDocument/formatting" (on-document-formatting state params)
       "textDocument/hover" (on-document-hover state params)
       "textDocument/signatureHelp" (on-document-signature-help state params)
-      # "textDocument/references" (on-document-references state params) TODO: Implement this? See src/lsp/api.ts:103
+      "textDocument/references" (on-document-references state params)
+      "textDocument/prepareRename" (on-prepare-rename state params)
+      "textDocument/rename" (on-document-rename state params)
       # "textDocument/documentSymbol" (on-document-symbols state params) TODO: Implement this? See src/lsp/api.ts:121
       "textDocument/definition" (on-document-definition state params)
       "janet/serverInfo" (on-janet-serverinfo state params)
