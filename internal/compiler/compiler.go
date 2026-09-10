@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -42,6 +44,10 @@ func Check(ctx context.Context, command []string, root string, request Request) 
 	}
 	process := exec.CommandContext(ctx, command[0], command[1:]...)
 	process.Dir = root
+	modulePath := filepath.Join(root, "jpm_tree", "lib")
+	if info, err := os.Stat(modulePath); err == nil && info.IsDir() {
+		process.Env = append(os.Environ(), "JANET_PATH="+modulePath)
+	}
 	process.Stdin = bytes.NewReader(payload)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

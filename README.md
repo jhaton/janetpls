@@ -71,7 +71,7 @@ Enable the helper with initialization options:
 }
 ```
 
-The server finds `janetpls-compiler` beside `janetpls` and then on `PATH`. Set `compilerPath` in the same object to use an explicit helper executable. Compilation can expand macros and imports, so enable it only for trusted workspaces. Each check has a two-second limit. Helper errors are logged once; the request then returns the pure-Go diagnostics.
+The server finds `janetpls-compiler` beside `janetpls` and then on `PATH`. Set `compilerPath` in the same object to use an explicit helper executable. For local JPM workspaces, the helper loads dependencies from `jpm_tree/lib` and uses Janet's flycheck evaluator, so `use`, `import`, and macros resolve without executing ordinary top-level code. Flychecking can still expand macros and execute forms explicitly marked `:flycheck`; enable it only for trusted workspaces. Each check has a two-second limit. Helper errors are logged once; the request then returns the pure-Go diagnostics.
 
 ## Editor configuration
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -21,6 +22,24 @@ func TestCheckExchangesStructuredDiagnostics(t *testing.T) {
 	want := []Diagnostic{{Line: 0, Column: 0, Message: "unknown symbol efn"}}
 	if !slices.Equal(diagnostics, want) {
 		t.Fatalf("diagnostics = %#v, want %#v", diagnostics, want)
+	}
+}
+
+func TestCheckUsesLocalJPMModulePath(t *testing.T) {
+	root := t.TempDir()
+	modulePath := filepath.Join(root, "jpm_tree", "lib")
+	if err := os.MkdirAll(modulePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	command := []string{
+		os.Args[0],
+		"-test.run=TestCompilerHelperProcess",
+		"--",
+		"module-path",
+		modulePath,
+	}
+	if _, err := Check(context.Background(), command, root, Request{}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -63,6 +82,12 @@ func TestCompilerHelperProcess(t *testing.T) {
 		_ = json.NewEncoder(os.Stdout).Encode(Response{Diagnostics: []Diagnostic{{
 			Line: 0, Column: 0, Message: "unknown symbol efn",
 		}}})
+		os.Exit(0)
+	case "module-path":
+		if separator+2 >= len(os.Args) || os.Getenv("JANET_PATH") != os.Args[separator+2] {
+			os.Exit(4)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(Response{Diagnostics: []Diagnostic{}})
 		os.Exit(0)
 	case "exit":
 		fmt.Fprintln(os.Stderr, "compiler crashed")

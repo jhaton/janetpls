@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - 2026-09-10
+
+- Compiler diagnostics now use Janet's flycheck evaluator and the workspace's local JPM module tree.
+- `use` and `import` forms resolve project dependencies without executing ordinary top-level code.
+
 ## 0.5.0 - 2026-09-08
 
 - Renamed the project, Go module, executables, and protocol identity from Janet LSP to Janet PLS.

@@ -17,115 +17,194 @@ static char *janetpls_copy_bytes(const uint8_t *bytes, int32_t length) {
     return copy;
 }
 
-static int janetpls_compile(
-    const uint8_t *source,
-    int32_t length,
-    const char *path,
-    int32_t *line,
-    int32_t *column,
-    char **message
+static char *janetpls_copy_janet_string(JanetString string) {
+    return janetpls_copy_bytes(string, janet_string_length(string));
+}
+
+static const char janetpls_flycheck_wrapper[] =
+    "(defn janetpls/check [file-path source-path]\n"
+    "  (def output @\"\")\n"
+    "  (with-dyns [*err* output]\n"
+    "    (flycheck file-path :source source-path))\n"
+    "  (string output))\n";
+
+static int janetpls_flycheck(
+    const char *file_path,
+    const char *source_path,
+    char **output
 ) {
     if (janet_init()) {
         static const char initialization_error[] = "libjanet initialization failed";
-        *message = janetpls_copy_bytes((const uint8_t *) initialization_error, sizeof(initialization_error) - 1);
+        *output = janetpls_copy_bytes(
+            (const uint8_t *) initialization_error,
+            sizeof(initialization_error) - 1
+        );
         return -1;
-    }
-
-    JanetParser parser;
-    janet_parser_init(&parser);
-    for (int32_t index = 0; index < length; index++) {
-        janet_parser_consume(&parser, source[index]);
-        if (janet_parser_status(&parser) == JANET_PARSE_ERROR) break;
-    }
-    if (janet_parser_status(&parser) != JANET_PARSE_ERROR) {
-        janet_parser_eof(&parser);
-    }
-    if (janet_parser_status(&parser) == JANET_PARSE_ERROR) {
-        *line = (int32_t) parser.line;
-        *column = (int32_t) parser.column;
-        const char *error = janet_parser_error(&parser);
-        if (error == NULL) error = "libjanet parse error";
-        *message = janetpls_copy_bytes((const uint8_t *) error, (int32_t) strlen(error));
-        janet_parser_deinit(&parser);
-        janet_deinit();
-        return *message == NULL ? -1 : 1;
     }
 
     JanetTable *environment = janet_core_env(NULL);
     janet_gcroot(janet_wrap_table(environment));
-    JanetArray *forms = janet_array(8);
-    janet_gcroot(janet_wrap_array(forms));
-    janet_array_push(forms, janet_csymbolv("do"));
-    while (janet_parser_has_more(&parser)) {
-        janet_array_push(forms, janet_parser_produce(&parser));
-    }
-    Janet source_form = janet_wrap_tuple(janet_tuple_n(forms->data, forms->count));
-    janet_gcroot(source_form);
-    Janet where = janet_wrap_string(janet_cstring(path));
-    janet_gcroot(where);
-    JanetCompileResult result = janet_compile(source_form, environment, janet_unwrap_string(where));
-    int status = 0;
-    if (result.status == JANET_COMPILE_ERROR) {
-        *line = result.error_mapping.line;
-        *column = result.error_mapping.column;
-        *message = janetpls_copy_bytes(result.error, janet_string_length(result.error));
-        status = *message == NULL ? -1 : 1;
+
+    Janet bootstrap_result;
+    int bootstrap_status = janet_dostring(
+        environment,
+        janetpls_flycheck_wrapper,
+        "janetpls/flycheck.janet",
+        &bootstrap_result
+    );
+    if (bootstrap_status) {
+        janet_gcroot(bootstrap_result);
+        *output = janetpls_copy_janet_string(janet_to_string(bootstrap_result));
+        janet_gcunroot(bootstrap_result);
+        janet_gcunroot(janet_wrap_table(environment));
+        janet_deinit();
+        return -1;
     }
 
-    janet_gcunroot(where);
-    janet_gcunroot(source_form);
-    janet_gcunroot(janet_wrap_array(forms));
+    Janet check;
+    janet_resolve(environment, janet_csymbol("janetpls/check"), &check);
+    if (!janet_checktype(check, JANET_FUNCTION)) {
+        static const char resolution_error[] = "libjanet flycheck function is unavailable";
+        *output = janetpls_copy_bytes(
+            (const uint8_t *) resolution_error,
+            sizeof(resolution_error) - 1
+        );
+        janet_gcunroot(janet_wrap_table(environment));
+        janet_deinit();
+        return -1;
+    }
+
+    Janet arguments[2];
+    arguments[0] = janet_cstringv(file_path);
+    janet_gcroot(arguments[0]);
+    arguments[1] = janet_cstringv(source_path);
+    janet_gcroot(arguments[1]);
+
+    Janet result;
+    JanetFiber *fiber = NULL;
+    JanetSignal signal = janet_pcall(
+        janet_unwrap_function(check),
+        2,
+        arguments,
+        &result,
+        &fiber
+    );
+    if (signal != JANET_SIGNAL_OK) {
+        janet_gcroot(result);
+        *output = janetpls_copy_janet_string(janet_to_string(result));
+        janet_gcunroot(result);
+        janet_gcunroot(arguments[1]);
+        janet_gcunroot(arguments[0]);
+        janet_gcunroot(janet_wrap_table(environment));
+        janet_deinit();
+        return -1;
+    }
+
+    if (!janet_checktype(result, JANET_STRING)) {
+        static const char result_error[] = "libjanet flycheck returned a non-string result";
+        *output = janetpls_copy_bytes(
+            (const uint8_t *) result_error,
+            sizeof(result_error) - 1
+        );
+        janet_gcunroot(arguments[1]);
+        janet_gcunroot(arguments[0]);
+        janet_gcunroot(janet_wrap_table(environment));
+        janet_deinit();
+        return -1;
+    }
+
+    *output = janetpls_copy_janet_string(janet_unwrap_string(result));
+    janet_gcunroot(arguments[1]);
+    janet_gcunroot(arguments[0]);
     janet_gcunroot(janet_wrap_table(environment));
-    janet_parser_deinit(&parser);
     janet_deinit();
-    return status;
+    return *output == NULL ? -1 : 0;
 }
 */
 import "C"
 
 import (
 	"errors"
-	"math"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/jhaton/janetpls/internal/compiler"
 )
 
 func compileSource(request compiler.Request) (compiler.Response, error) {
-	if len(request.Source) > math.MaxInt32 {
-		return compiler.Response{}, errors.New("source exceeds libjanet input limit")
+	sourceFile, err := os.CreateTemp("", "janetpls-compiler-*.janet")
+	if err != nil {
+		return compiler.Response{}, fmt.Errorf("create flycheck source: %w", err)
 	}
-	source := C.CBytes([]byte(request.Source))
-	defer C.free(source)
-	path := C.CString(request.Path)
-	defer C.free(unsafe.Pointer(path))
-	var line C.int32_t
-	var column C.int32_t
-	var message *C.char
-	status := C.janetpls_compile(
-		(*C.uint8_t)(source),
-		C.int32_t(len(request.Source)),
-		path,
-		&line,
-		&column,
-		&message,
-	)
-	if message != nil {
-		defer C.free(unsafe.Pointer(message))
+	sourcePath := sourceFile.Name()
+	defer os.Remove(sourcePath)
+	if _, err := sourceFile.WriteString(request.Source); err != nil {
+		sourceFile.Close()
+		return compiler.Response{}, fmt.Errorf("write flycheck source: %w", err)
+	}
+	if err := sourceFile.Close(); err != nil {
+		return compiler.Response{}, fmt.Errorf("close flycheck source: %w", err)
+	}
+
+	filePath := C.CString(sourcePath)
+	defer C.free(unsafe.Pointer(filePath))
+	displayPath := C.CString(request.Path)
+	defer C.free(unsafe.Pointer(displayPath))
+	var output *C.char
+	status := C.janetpls_flycheck(filePath, displayPath, &output)
+	if output != nil {
+		defer C.free(unsafe.Pointer(output))
 	}
 	if status < 0 {
-		if message == nil {
-			return compiler.Response{}, errors.New("libjanet compilation failed")
+		if output == nil {
+			return compiler.Response{}, errors.New("libjanet flycheck failed")
 		}
-		return compiler.Response{}, errors.New(C.GoString(message))
+		return compiler.Response{}, errors.New(C.GoString(output))
 	}
-	response := compiler.Response{Diagnostics: []compiler.Diagnostic{}}
-	if status > 0 {
-		response.Diagnostics = append(response.Diagnostics, compiler.Diagnostic{
-			Line:    max(int(line)-1, 0),
-			Column:  max(int(column)-1, 0),
-			Message: C.GoString(message),
+	if output == nil {
+		return compiler.Response{}, errors.New("libjanet flycheck returned no output")
+	}
+	return compiler.Response{
+		Diagnostics: parseFlycheckDiagnostics(C.GoString(output), request.Path),
+	}, nil
+}
+
+func parseFlycheckDiagnostics(output, path string) []compiler.Diagnostic {
+	diagnostics := []compiler.Diagnostic{}
+	prefix := "error: " + path + ":"
+	for line := range strings.SplitSeq(output, "\n") {
+		location, found := strings.CutPrefix(line, prefix)
+		if !found {
+			continue
+		}
+		lineText, location, found := strings.Cut(location, ":")
+		if !found {
+			continue
+		}
+		columnText, message, found := strings.Cut(location, ":")
+		if !found {
+			continue
+		}
+		lineNumber, lineError := strconv.Atoi(lineText)
+		columnNumber, columnError := strconv.Atoi(columnText)
+		if lineError != nil || columnError != nil {
+			continue
+		}
+		message = strings.TrimSpace(message)
+		for _, kind := range [...]string{"compile error: ", "parse error: ", "runtime error: "} {
+			if trimmed, ok := strings.CutPrefix(message, kind); ok {
+				message = trimmed
+				break
+			}
+		}
+		diagnostics = append(diagnostics, compiler.Diagnostic{
+			Line:    max(lineNumber-1, 0),
+			Column:  max(columnNumber-1, 0),
+			Message: message,
 		})
 	}
-	return response, nil
+	return diagnostics
 }
