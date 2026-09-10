@@ -2,13 +2,21 @@ name: CI
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
   pull_request:
 
 permissions:
   contents: read
 
+env:
+  JANET_VERSION: "1.42.0"
+
 jobs:
   test:
+    name: Go checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,7 +24,158 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go test ./...
-      - run: go test -race ./...
-      - run: go build -trimpath -o bin/janetpls ./cmd/janetpls
-      - run: bin/janetpls --version
+      - run: make check
+      - run: go vet ./...
+
+  compiler-test:
+    name: Libjanet checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check out Janet
+        uses: actions/checkout@v4
+        with:
+          repository: janet-lang/janet
+          ref: v${{ env.JANET_VERSION }}
+          path: _janet
+      - name: Build Janet
+        shell: bash
+        run: |
+          make -C _janet -j2
+          make -C _janet install PREFIX="$RUNNER_TEMP/janet"
+          echo "$RUNNER_TEMP/janet/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/janet/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/janet/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+      - run: make check-compiler
+      - run: go vet -tags libjanet ./cmd/janetpls-compiler
+
+  release-build:
+    name: Release ${{ matrix.id }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - test
+      - compiler-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-amd64
+            runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            compiler: true
+            extension: tar.gz
+          - id: linux-arm64
+            runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            compiler: true
+            extension: tar.gz
+          - id: darwin-amd64
+            runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            compiler: true
+            extension: tar.gz
+          - id: darwin-arm64
+            runner: macos-15
+            goos: darwin
+            goarch: arm64
+            compiler: true
+            extension: tar.gz
+          - id: windows-amd64
+            runner: windows-latest
+            goos: windows
+            goarch: amd64
+            compiler: false
+            extension: zip
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check out Janet
+        if: matrix.compiler
+        uses: actions/checkout@v4
+        with:
+          repository: janet-lang/janet
+          ref: v${{ env.JANET_VERSION }}
+          path: _janet
+      - name: Build Janet
+        if: matrix.compiler
+        shell: bash
+        run: |
+          make -C _janet -j2
+          make -C _janet install PREFIX="$RUNNER_TEMP/janet"
+          echo "$RUNNER_TEMP/janet/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/janet/lib/pkgconfig" >> "$GITHUB_ENV"
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            echo "DYLD_LIBRARY_PATH=$RUNNER_TEMP/janet/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          else
+            echo "LD_LIBRARY_PATH=$RUNNER_TEMP/janet/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          fi
+      - name: Build release archive
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="janetpls-${version}-${{ matrix.id }}"
+          stage="dist/$archive"
+          mkdir -p "$stage"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$stage/janetpls.exe" ./cmd/janetpls
+          else
+            CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$stage/janetpls" ./cmd/janetpls
+          fi
+          if [[ "${{ matrix.compiler }}" == "true" ]]; then
+            CGO_ENABLED=1 go build -tags libjanet -trimpath -ldflags="-s -w" \
+              -o "$stage/janetpls-compiler" ./cmd/janetpls-compiler
+          fi
+          cp README.md LICENSE "$stage/"
+          if [[ "${{ matrix.extension }}" == "zip" ]]; then
+            (cd "$stage" && 7z a "../$archive.zip" ./*)
+          else
+            tar -czf "dist/$archive.tar.gz" -C "$stage" .
+          fi
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.id }}
+          path: dist/*.${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - release-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum janetpls-* | sort -k2 > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" ./* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME"

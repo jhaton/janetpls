@@ -46,6 +46,10 @@ Confirm the installed binary:
 janetpls --version
 ```
 
+## Releases
+
+Push a version tag matching `v*` to run the full Go and libjanet checks before publishing a GitHub release. Release archives are built natively for Linux and macOS on AMD64 and ARM64; those archives contain both `janetpls` and `janetpls-compiler`. The Windows AMD64 archive contains the pure-Go `janetpls.exe`. The compiler helper dynamically links libjanet 1.42 and therefore requires a compatible Janet installation on the target system. Every release includes SHA-256 checksums.
+
 ## Optional compiler diagnostics
 
 Compiler diagnostics catch semantic errors such as `unknown symbol efn`. They run in a separate, one-request helper process so a missing shared library, native crash, timeout, or malformed response cannot take down the language server.
