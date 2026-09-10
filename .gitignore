@@ -1,6 +1,6 @@
 /reference/
 /bin/
-/janet-lsp
+/janetpls
 
 build
 jpm_tree/**

@@ -3,7 +3,7 @@ package lsp
 import (
 	"encoding/json"
 
-	"github.com/jhaton/janet-lsp/internal/janet"
+	"github.com/jhaton/janetpls/internal/janet"
 )
 
 type rpcMessage struct {

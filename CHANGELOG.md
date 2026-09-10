@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 - 2026-09-08
+
+- Renamed the project, Go module, executables, and protocol identity from Janet LSP to Janet PLS.
+- The pure-Go server is now `janetpls`; the optional libjanet helper is `janetpls-compiler`.
 
 ## 0.4.0 - 2026-09-08
 

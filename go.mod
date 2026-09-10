@@ -1,3 +1,3 @@
-module github.com/jhaton/janet-lsp
+module github.com/jhaton/janetpls
 
 go 1.27.1

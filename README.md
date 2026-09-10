@@ -1,4 +1,4 @@
-# Janet LSP
+# Janet PLS
 
 A standalone [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server for [Janet](https://janet-lang.org), implemented in Go.
 
@@ -26,24 +26,24 @@ Formatting rejects malformed source rather than returning a destructive edit. Wi
 The repository pins its Go toolchain with [mise](https://mise.jdx.dev/):
 
 ```sh
-git clone https://github.com/jhaton/janet-lsp.git
-cd janet-lsp
+git clone https://github.com/jhaton/janetpls.git
+cd janetpls
 mise install
 mise exec -- make check
 ```
 
-The pure-Go binary is written to `bin/janet-lsp`. Janet itself is not required to build or run it.
+The pure-Go binary is written to `bin/janetpls`. Janet itself is not required to build or run it.
 
 To install through Go instead:
 
 ```sh
-go install github.com/jhaton/janet-lsp/cmd/janet-lsp@latest
+go install github.com/jhaton/janetpls/cmd/janetpls@latest
 ```
 
 Confirm the installed binary:
 
 ```sh
-janet-lsp --version
+janetpls --version
 ```
 
 ## Optional compiler diagnostics
@@ -56,11 +56,11 @@ Build and test the helper when the Janet development package is available throug
 mise exec -- make check-compiler
 ```
 
-This writes `bin/janet-lsp-compiler`. Install both binaries into the same directory:
+This writes `bin/janetpls-compiler`. Install both binaries into the same directory:
 
 ```sh
-GOBIN=\"$HOME/.local/bin\" go install github.com/jhaton/janet-lsp/cmd/janet-lsp@latest
-GOBIN=\"$HOME/.local/bin\" go install -tags libjanet github.com/jhaton/janet-lsp/cmd/janet-lsp-compiler@latest
+GOBIN=\"$HOME/.local/bin\" go install github.com/jhaton/janetpls/cmd/janetpls@latest
+GOBIN=\"$HOME/.local/bin\" go install -tags libjanet github.com/jhaton/janetpls/cmd/janetpls-compiler@latest
 ```
 
 Enable the helper with initialization options:
@@ -71,41 +71,41 @@ Enable the helper with initialization options:
 }
 ```
 
-The server finds `janet-lsp-compiler` beside `janet-lsp` and then on `PATH`. Set `compilerPath` in the same object to use an explicit helper executable. Compilation can expand macros and imports, so enable it only for trusted workspaces. Each check has a two-second limit. Helper errors are logged once; the request then returns the pure-Go diagnostics.
+The server finds `janetpls-compiler` beside `janetpls` and then on `PATH`. Set `compilerPath` in the same object to use an explicit helper executable. Compilation can expand macros and imports, so enable it only for trusted workspaces. Each check has a two-second limit. Helper errors are logged once; the request then returns the pure-Go diagnostics.
 
 ## Editor configuration
 
-Configure an LSP client to start `janet-lsp` over standard input and output for `*.janet` files, with the project directory as the workspace root.
+Configure an LSP client to start `janetpls` over standard input and output for `*.janet` files, with the project directory as the workspace root.
 
 Neovim 0.11 example:
 
 ```lua
-vim.lsp.config("janet_lsp", {
-  cmd = { "janet-lsp" },
+vim.lsp.config("janetpls", {
+  cmd = { "janetpls" },
   filetypes = { "janet" },
   root_markers = { "project.janet", ".git" },
   init_options = {
     compilerDiagnostics = true,
   },
 })
-vim.lsp.enable("janet_lsp")
+vim.lsp.enable("janetpls")
 ```
 
 Helix example:
 
 ```toml
-[language-server.janet-lsp]
-command = "janet-lsp"
+[language-server.janetpls]
+command = "janetpls"
 
 [[language]]
 name = "janet"
-language-servers = ["janet-lsp"]
+language-servers = ["janetpls"]
 ```
 
 ## Architecture
 
-- `cmd/janet-lsp`: pure-Go CLI and stdio process lifecycle
-- `cmd/janet-lsp-compiler`: optional cgo/libjanet compiler worker
+- `cmd/janetpls`: pure-Go CLI and stdio process lifecycle
+- `cmd/janetpls-compiler`: optional cgo/libjanet compiler worker
 - `internal/compiler`: isolated worker protocol, process execution, cancellation, and failure handling
 - `internal/lsp`: JSON-RPC framing, LSP request dispatch, open-document state, and wire types
 - `internal/janet`: tolerant syntax model, deterministic formatter, UTF-16 position conversion, lexical scopes, imports, and workspace index
@@ -117,7 +117,7 @@ Each language request builds a deterministic index from Git-tracked and unignore
 ```sh
 mise exec -- make test            # pure-Go unit and protocol integration tests
 mise exec -- make race            # pure-Go race detector
-mise exec -- make build           # bin/janet-lsp
+mise exec -- make build           # bin/janetpls
 mise exec -- make check            # pure-Go checks and version smoke test
 mise exec -- make check-compiler   # cgo helper tests and build
 ```

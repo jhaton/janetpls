@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jhaton/janet-lsp/internal/janet"
+	"github.com/jhaton/janetpls/internal/janet"
 )
 
 func TestFormattingUsesOpenDocumentAndReturnsFullEdit(t *testing.T) {

@@ -12,10 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jhaton/janet-lsp/internal/janet"
+	"github.com/jhaton/janetpls/internal/janet"
 )
 
-const Version = "0.4.0"
+const Version = "0.5.0"
 
 type openDocument struct {
 	Text    string
@@ -244,7 +244,7 @@ func initializeResult() map[string]any {
 			"diagnosticProvider":         map[string]any{"interFileDependencies": true, "workspaceDiagnostics": false},
 			"documentFormattingProvider": true,
 		},
-		"serverInfo": map[string]any{"name": "janet-lsp", "version": Version},
+		"serverInfo": map[string]any{"name": "janetpls", "version": Version},
 	}
 }
 
@@ -544,7 +544,7 @@ func diagnostics(document *janet.Document) []diagnostic {
 	for _, item := range document.Diagnostics {
 		items = append(items, diagnostic{
 			Range: document.Range(item.Start, item.End), Severity: 1,
-			Source: "janet-lsp", Message: item.Message,
+			Source: "janetpls", Message: item.Message,
 		})
 	}
 	return items

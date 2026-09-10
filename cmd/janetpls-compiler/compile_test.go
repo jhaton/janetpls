@@ -5,7 +5,7 @@ package main
 import (
 	"testing"
 
-	"github.com/jhaton/janet-lsp/internal/compiler"
+	"github.com/jhaton/janetpls/internal/compiler"
 )
 
 func TestCompileSourceReportsUnknownSymbol(t *testing.T) {

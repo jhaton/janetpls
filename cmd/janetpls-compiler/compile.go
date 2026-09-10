@@ -9,7 +9,7 @@ package main
 #include <stdlib.h>
 #include <string.h>
 
-static char *janet_lsp_copy_bytes(const uint8_t *bytes, int32_t length) {
+static char *janetpls_copy_bytes(const uint8_t *bytes, int32_t length) {
     char *copy = malloc((size_t) length + 1);
     if (copy == NULL) return NULL;
     memcpy(copy, bytes, (size_t) length);
@@ -17,7 +17,7 @@ static char *janet_lsp_copy_bytes(const uint8_t *bytes, int32_t length) {
     return copy;
 }
 
-static int janet_lsp_compile(
+static int janetpls_compile(
     const uint8_t *source,
     int32_t length,
     const char *path,
@@ -27,7 +27,7 @@ static int janet_lsp_compile(
 ) {
     if (janet_init()) {
         static const char initialization_error[] = "libjanet initialization failed";
-        *message = janet_lsp_copy_bytes((const uint8_t *) initialization_error, sizeof(initialization_error) - 1);
+        *message = janetpls_copy_bytes((const uint8_t *) initialization_error, sizeof(initialization_error) - 1);
         return -1;
     }
 
@@ -45,7 +45,7 @@ static int janet_lsp_compile(
         *column = (int32_t) parser.column;
         const char *error = janet_parser_error(&parser);
         if (error == NULL) error = "libjanet parse error";
-        *message = janet_lsp_copy_bytes((const uint8_t *) error, (int32_t) strlen(error));
+        *message = janetpls_copy_bytes((const uint8_t *) error, (int32_t) strlen(error));
         janet_parser_deinit(&parser);
         janet_deinit();
         return *message == NULL ? -1 : 1;
@@ -68,7 +68,7 @@ static int janet_lsp_compile(
     if (result.status == JANET_COMPILE_ERROR) {
         *line = result.error_mapping.line;
         *column = result.error_mapping.column;
-        *message = janet_lsp_copy_bytes(result.error, janet_string_length(result.error));
+        *message = janetpls_copy_bytes(result.error, janet_string_length(result.error));
         status = *message == NULL ? -1 : 1;
     }
 
@@ -88,7 +88,7 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/jhaton/janet-lsp/internal/compiler"
+	"github.com/jhaton/janetpls/internal/compiler"
 )
 
 func compileSource(request compiler.Request) (compiler.Response, error) {
@@ -102,7 +102,7 @@ func compileSource(request compiler.Request) (compiler.Response, error) {
 	var line C.int32_t
 	var column C.int32_t
 	var message *C.char
-	status := C.janet_lsp_compile(
+	status := C.janetpls_compile(
 		(*C.uint8_t)(source),
 		C.int32_t(len(request.Source)),
 		path,

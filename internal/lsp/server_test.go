@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	compilerapi "github.com/jhaton/janet-lsp/internal/compiler"
-	"github.com/jhaton/janet-lsp/internal/janet"
+	compilerapi "github.com/jhaton/janetpls/internal/compiler"
+	"github.com/jhaton/janetpls/internal/janet"
 )
 
 func TestServerRunInitializeShutdownExit(t *testing.T) {
@@ -244,7 +244,7 @@ func TestMergeDiagnosticsRemovesDuplicates(t *testing.T) {
 			End:   janet.Position{Line: 1, Character: 3},
 		},
 		Severity: 1,
-		Source:   "janet-lsp",
+		Source:   "janetpls",
 		Message:  "same error",
 	}
 	duplicate := shared

@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/jhaton/janet-lsp/internal/compiler"
+	"github.com/jhaton/janetpls/internal/compiler"
 )
 
 const maximumRequestBytes = 64 << 20

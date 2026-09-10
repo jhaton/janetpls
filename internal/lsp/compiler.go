@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	compilerapi "github.com/jhaton/janet-lsp/internal/compiler"
-	"github.com/jhaton/janet-lsp/internal/janet"
+	compilerapi "github.com/jhaton/janetpls/internal/compiler"
+	"github.com/jhaton/janetpls/internal/janet"
 )
 
 const defaultCompilerTimeout = 2 * time.Second
@@ -43,14 +43,14 @@ func compilerCommand(explicit, root string) ([]string, error) {
 		return []string{resolved}, nil
 	}
 	if executable, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(executable), "janet-lsp-compiler")
+		candidate := filepath.Join(filepath.Dir(executable), "janetpls-compiler")
 		if resolved, err := executablePath(candidate); err == nil {
 			return []string{resolved}, nil
 		}
 	}
-	resolved, err := exec.LookPath("janet-lsp-compiler")
+	resolved, err := exec.LookPath("janetpls-compiler")
 	if err != nil {
-		return nil, errors.New("compiler diagnostics requested but janet-lsp-compiler was not found")
+		return nil, errors.New("compiler diagnostics requested but janetpls-compiler was not found")
 	}
 	return []string{resolved}, nil
 }
