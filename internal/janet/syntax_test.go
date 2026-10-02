@@ -48,6 +48,23 @@ func TestParseIgnoresCommentsAndStringContents(t *testing.T) {
 	}
 }
 
+func TestParseAcceptsMultiLineStrings(t *testing.T) {
+	// Janet strings and buffers may contain literal newlines, as docstrings do.
+	source := "(defn greet\n  \"Say hello\n  to name.\"\n  [name]\n  (print @\"hello\n\" name))\n(def after 1)"
+	document := Parse("file:///test.janet", "/test.janet", source)
+	if len(document.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", document.Diagnostics)
+	}
+	if got := len(document.Root.Children); got != 2 {
+		t.Fatalf("top-level forms = %d, want 2", got)
+	}
+	for _, token := range document.Tokens {
+		if token.Text == "to" || token.Text == "name.\"" {
+			t.Fatalf("string contents emitted as symbol: %#v", token)
+		}
+	}
+}
+
 func TestMutableDelimiters(t *testing.T) {
 	document := Parse("file:///test.janet", "/test.janet", "@[(one) @{two three}]")
 	if len(document.Diagnostics) != 0 {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 - 2026-10-02
+
+- Fixed false "unterminated string" diagnostics on strings and buffers that span lines, such as multi-line docstrings; like Janet's parser, only the end of the file leaves a quoted string unterminated.
+
 ## 0.5.1 - 2026-09-10
 
 - Compiler diagnostics now use Janet's flycheck evaluator and the workspace's local JPM module tree.

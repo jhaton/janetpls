@@ -278,6 +278,9 @@ func lex(source string) ([]Token, []Diagnostic) {
 	return tokens, diagnostics
 }
 
+// scanQuotedString returns the end of the string or buffer literal whose
+// opening quote is at start. Like Janet's parser (and the formatter), it allows
+// literal newlines; only end of input leaves it unterminated.
 func scanQuotedString(source string, start int) (int, bool) {
 	for index := start + 1; index < len(source); index++ {
 		switch source[index] {
@@ -285,8 +288,6 @@ func scanQuotedString(source string, start int) (int, bool) {
 			index++
 		case '"':
 			return index + 1, true
-		case '\n':
-			return index, false
 		}
 	}
 	return len(source), false
